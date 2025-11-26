@@ -1,0 +1,45 @@
+# Core Deep Learning and GNN Libraries
+torch>=2.0.0
+torch-geometric>=2.4.0
+torch-scatter>=2.1.0
+torch-sparse>=0.6.17
+torch-cluster>=1.6.1
+torch-spline-conv>=1.2.2
+
+# Data Processing
+numpy>=1.24.0
+pandas>=2.0.0
+scipy>=1.10.0
+scikit-learn>=1.3.0
+networkx>=3.0
+
+# Visualization
+matplotlib>=3.7.0
+seaborn>=0.12.0
+plotly>=5.14.0
+
+# Hyperparameter Tuning
+wandb>=0.15.0
+optuna>=3.1.0
+ray[tune]>=2.4.0
+
+# API and Deployment
+fastapi>=0.100.0
+uvicorn>=0.23.0
+pydantic>=2.0.0
+streamlit>=1.25.0
+graduio>=3.35.0
+
+# Utilities
+pyyaml>=6.0
+tqdm>=4.65.0
+joblib>=1.3.0
+python-dotenv>=1.0.0
+
+# Documentation
+jupyter>=1.0.0
+ipykernel>=6.23.0
+
+# Docker and Production
+gunicorn>=21.0.0
+redis>=4.5.0
