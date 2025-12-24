@@ -1,0 +1,36 @@
+{
+  "meta_frac": 0.2,
+  "meta_rep_max_quantile": 0.7,
+  "meta_min_influ_receivers": 1,
+  "so_site": "stackoverflow",
+  "so_tag": "machine-learning",
+  "so_pagesize": 100,
+  "so_max_pages_questions": 3,
+  "so_max_pages_answers": 3,
+  "so_sleep_s": 0.35,
+  "so_api_key": null,
+  "influencer_top_pct": 0.1,
+  "train_frac": 0.7,
+  "val_frac": 0.15,
+  "test_frac": 0.15,
+  "seed": 42,
+  "lr": 0.0003,
+  "hidden": 64,
+  "dropout": 0.2,
+  "epochs": 80,
+  "hops_list": [
+    1,
+    2,
+    3,
+    4
+  ],
+  "gnn_list": [
+    "sage",
+    "gcn",
+    "sgc"
+  ],
+  "infer_runs": 20,
+  "use_cuda_if_available": true,
+  "out_dir": "/content/drive/MyDrive/results_phase2_part2_cpu_gpu",
+  "cache_dir": "/content/drive/MyDrive/cache_phase2_real"
+}

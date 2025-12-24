@@ -1,0 +1,4 @@
+
+# Ignore large generated artifacts (GitHub limit >100MB)
+project/vis/phase1_hetero_gnn_data.pt
+project/vis/graph_for_visualizer_medium.json

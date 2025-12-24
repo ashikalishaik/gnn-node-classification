@@ -1,0 +1,22 @@
+{
+  "dataset": "stackoverflow",
+  "tag": "machine-learning",
+  "n_users": 973,
+  "n_edges": 865,
+  "thr_rep_proxy": 1061.5,
+  "label_stats": {
+    "positives": 172,
+    "negatives": 801,
+    "influencers": 99,
+    "metas": 73
+  },
+  "feature_cols_user": [
+    "num_questions",
+    "num_answers",
+    "sum_q_score",
+    "sum_a_score",
+    "distinct_users_interacted",
+    "distinct_posts_interacted",
+    "rep_proxy"
+  ]
+}

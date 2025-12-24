@@ -1,0 +1,17 @@
+{
+  "dataset": "wikivote",
+  "n_users": 7115,
+  "n_edges": 103689,
+  "thr_rep_proxy": 136.0,
+  "label_stats": {
+    "positives": 1243,
+    "negatives": 5872,
+    "influencers": 714,
+    "metas": 529
+  },
+  "feature_cols_user": [
+    "in_deg",
+    "out_deg",
+    "rep_proxy"
+  ]
+}

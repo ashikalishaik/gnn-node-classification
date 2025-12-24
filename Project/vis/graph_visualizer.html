@@ -1,0 +1,510 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Influence Graph Visualizer (Hop-based)</title>
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+  <style>
+    body {
+      font-family: sans-serif;
+      background: #f5f5f5;
+    }
+    #controls {
+      margin: 10px;
+      padding: 10px;
+      background: #ffffff;
+      border-radius: 8px;
+      box-shadow: 0 0 4px rgba(0,0,0,0.1);
+    }
+    #graph-container {
+      margin: 10px;
+      background: #ffffff;
+      border-radius: 8px;
+      box-shadow: 0 0 4px rgba(0,0,0,0.1);
+    }
+    svg {
+      width: 100%;
+      height: 700px;
+      background: #fafafa;
+    }
+    .node {
+      stroke: #333;
+      stroke-width: 1px;
+      cursor: pointer;
+    }
+    .node-label {
+      font-size: 10px;
+      pointer-events: none;
+    }
+    .legend {
+      font-size: 12px;
+    }
+    .legend-item {
+      display: flex;
+      align-items: center;
+      margin: 2px 0;
+    }
+    .legend-color-box {
+      width: 14px;
+      height: 14px;
+      margin-right: 6px;
+      border: 1px solid #444;
+    }
+  </style>
+</head>
+<body>
+  <div id="controls">
+    <div style="margin-bottom: 6px;">
+      <label><b>Load JSON:</b> <input type="file" id="json-file-input" accept=".json" /></label>
+      <span id="status" style="margin-left: 10px; color: #555;"></span>
+    </div>
+    <div>
+      <label>User ID: <input type="number" id="user-id-input" value="0" min="0" /></label>
+      <label style="margin-left: 10px;">Max hops:
+        <input type="number" id="hops-input" value="2" min="1" />
+      </label>
+      <button id="load-btn">Load Ego Graph</button>
+    </div>
+    <div style="margin-top: 8px; color: #444;">
+      <b>Interaction:</b><br/>
+      1) Choose <b>graph_for_visualizer_small.json</b> above.<br/>
+      2) Enter a user id and max hops, click "Load Ego Graph".<br/>
+      3) Click a <b>user node</b> in hop h to expand only that user's neighbors in hop h+1 (until max hops).<br/>
+      4) Click a <b>post node</b> to see who created/liked/reshared/commented it.<br/>
+      5) Click a <b>comment node</b> to see who wrote it and which post it's under.<br/>
+      Use mouse wheel or trackpad to <b>zoom</b>, drag background to <b>pan</b>.
+    </div>
+  </div>
+
+  <div id="graph-container">
+    <svg id="graph-svg"></svg>
+  </div>
+
+  <script>
+    // Node & edge colors
+    const nodeColors = {
+      user: "orange",
+      post: "blue",
+      comment: "yellow"
+    };
+
+    const edgeColors = {
+      follows: "red",
+      posted: "green",
+      liked: "purple",
+      reshared: "cyan",
+      commented: "brown",
+      under: "gray"
+    };
+
+    let graphData = null;
+    let adjOut = {};  // source -> [{target, etype}]
+    let adjIn  = {};  // target -> [{source, etype}]
+    let nodeById = {};
+
+    let currentNodes = [];
+    let currentLinks = [];
+    let maxHopsGlobal = 2;
+
+    const svg = d3.select("#graph-svg");
+    const width  = () => svg.node().getBoundingClientRect().width;
+    const height = () => svg.node().getBoundingClientRect().height;
+
+    let simulation;
+    let linkSelection;
+    let nodeSelection;
+    let labelSelection;
+    let zoomLayer;   // group that will be zoomed/panned
+
+    // ---------- JSON file loader ----------
+    document.getElementById("json-file-input").addEventListener("change", function(evt) {
+      const file = evt.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        try {
+          graphData = JSON.parse(e.target.result);
+          buildAdjacency();
+          initLegend();
+          d3.select("#status").text("Graph JSON loaded: " + file.name);
+        } catch (err) {
+          console.error(err);
+          d3.select("#status").text("Error parsing JSON file.");
+        }
+      };
+      reader.readAsText(file);
+    });
+
+    function buildAdjacency() {
+      nodeById = {};
+      graphData.nodes.forEach(n => {
+        nodeById[n.id] = { ...n, hop: null };
+      });
+
+      adjOut = {};
+      adjIn  = {};
+      graphData.nodes.forEach(n => {
+        adjOut[n.id] = [];
+        adjIn[n.id]  = [];
+      });
+
+      graphData.edges.forEach(e => {
+        if (!adjOut[e.source]) adjOut[e.source] = [];
+        if (!adjIn[e.target])  adjIn[e.target]  = [];
+        adjOut[e.source].push({ target: e.target, etype: e.etype });
+        adjIn[e.target].push({ source: e.source, etype: e.etype });
+      });
+    }
+
+    // ---------- Legend ----------
+    function initLegend() {
+      // Avoid duplicating legend if JSON reloaded
+      if (d3.select("#controls").select(".legend").size() > 0) return;
+
+      const legendDiv = d3.select("#controls").append("div")
+        .style("margin-top", "8px")
+        .attr("class", "legend");
+
+      legendDiv.append("div").style("font-weight", "bold").text("Node types:");
+      ["user", "post", "comment"].forEach(t => {
+        const item = legendDiv.append("div").attr("class", "legend-item");
+        item.append("div")
+          .attr("class", "legend-color-box")
+          .style("background", nodeColors[t]);
+        item.append("span").text(t);
+      });
+
+      legendDiv.append("div").style("margin-top", "4px").style("font-weight", "bold").text("Edge types:");
+      Object.keys(edgeColors).forEach(t => {
+        const item = legendDiv.append("div").attr("class", "legend-item");
+        item.append("div")
+          .attr("class", "legend-color-box")
+          .style("background", edgeColors[t]);
+        item.append("span").text(t);
+      });
+    }
+
+    // ---------- UI: load ego graph ----------
+    document.getElementById("load-btn").addEventListener("click", () => {
+      if (!graphData) {
+        alert("Graph JSON not loaded yet. Please choose graph_for_visualizer_small.json first.");
+        return;
+      }
+
+      const userId = parseInt(document.getElementById("user-id-input").value, 10);
+      const hops = parseInt(document.getElementById("hops-input").value, 10);
+      if (isNaN(userId) || userId < 0) {
+        alert("Please enter a valid non-negative user id.");
+        return;
+      }
+      if (isNaN(hops) || hops < 1) {
+        alert("Max hops must be >= 1.");
+        return;
+      }
+      maxHopsGlobal = hops;
+      loadEgoGraphForUser(userId);
+    });
+
+    // ---------- Build 1-hop ego graph ----------
+    function loadEgoGraphForUser(userIndex) {
+      const centerId = `user_${userIndex}`;
+      if (!nodeById[centerId]) {
+        alert(`User node ${centerId} not found in JSON.`);
+        return;
+      }
+
+      currentNodes = [];
+      currentLinks = [];
+
+      const centerNode = { ...nodeById[centerId], hop: 0 };
+      nodeById[centerId].hop = 0;
+      currentNodes.push(centerNode);
+
+      const neighbors = adjOut[centerId] || [];
+      neighbors.forEach(e => {
+        const targetNode = nodeById[e.target];
+        if (!targetNode) return;
+        if (targetNode.hop === null || targetNode.hop > 1) {
+          targetNode.hop = 1;
+        }
+        if (!currentNodes.find(n => n.id === targetNode.id)) {
+          currentNodes.push({ ...targetNode });
+        }
+        currentLinks.push({
+          source: centerId,
+          target: targetNode.id,
+          etype: e.etype
+        });
+      });
+
+      d3.select("#status").text(
+        `Loaded 1-hop ego graph for ${centerId}, max hops = ${maxHopsGlobal}.`
+      );
+      restartSimulation();
+    }
+
+    // ---------- Expand from clicked user ----------
+    function expandFromNode(nodeId) {
+      const node = currentNodes.find(n => n.id === nodeId);
+      if (!node) return;
+
+      if (node.hop == null) return;
+      if (node.hop >= maxHopsGlobal) {
+        d3.select("#status").text(`Node ${nodeId}: already at max hop ${maxHopsGlobal}.`);
+        return;
+      }
+
+      const nextHop = node.hop + 1;
+      const neighbors = adjOut[nodeId] || [];
+      let addedSomething = false;
+
+      neighbors.forEach(e => {
+        const tNode = nodeById[e.target];
+        if (!tNode) return;
+
+        let existing = currentNodes.find(n => n.id === tNode.id);
+        if (!existing) {
+          tNode.hop = nextHop;
+          currentNodes.push({ ...tNode });
+          addedSomething = true;
+        } else {
+          if (existing.hop == null || existing.hop > nextHop) {
+            existing.hop = nextHop;
+            addedSomething = true;
+          }
+        }
+
+        const alreadyLink = currentLinks.find(
+          l => l.source === nodeId && l.target === tNode.id && l.etype === e.etype
+        );
+        if (!alreadyLink) {
+          currentLinks.push({
+            source: nodeId,
+            target: tNode.id,
+            etype: e.etype
+          });
+          addedSomething = true;
+        }
+      });
+
+      if (addedSomething) {
+        d3.select("#status").text(
+          `Expanded from ${nodeId} to hop ${nextHop}. Nodes: ${currentNodes.length}, edges: ${currentLinks.length}.`
+        );
+        restartSimulation();
+      } else {
+        d3.select("#status").text(`No new neighbors added for ${nodeId}.`);
+      }
+    }
+
+    // ---------- Show post / comment info ----------
+    function showPostInfo(postId) {
+      // postId is like "post_123"
+      const incoming = adjIn[postId] || [];
+      const creators = new Set();
+      const likers = new Set();
+      const resharers = new Set();
+      const commentNodes = new Set();
+
+      incoming.forEach(e => {
+        const srcNode = nodeById[e.source];
+        if (!srcNode) return;
+        if (e.etype === "posted" && srcNode.ntype === "user") {
+          creators.add(e.source);
+        }
+        if (e.etype === "liked" && srcNode.ntype === "user") {
+          likers.add(e.source);
+        }
+        if (e.etype === "reshared" && srcNode.ntype === "user") {
+          resharers.add(e.source);
+        }
+        if (e.etype === "under" && srcNode.ntype === "comment") {
+          commentNodes.add(e.source);
+        }
+      });
+
+      // For comments on this post, find which USERS wrote them
+      const commentingUsers = new Set();
+      commentNodes.forEach(cid => {
+        const inc = adjIn[cid] || [];
+        inc.forEach(e2 => {
+          const srcNode2 = nodeById[e2.source];
+          if (e2.etype === "commented" && srcNode2 && srcNode2.ntype === "user") {
+            commentingUsers.add(e2.source);
+          }
+        });
+      });
+
+      const fmtSet = (s) => (s.size === 0 ? "none" : Array.from(s).join(", "));
+
+      const msg = `Post ${postId}:
+  Creator(s): ${fmtSet(creators)}
+  Liked by: ${fmtSet(likers)}
+  Reshared by: ${fmtSet(resharers)}
+  Commented by (users): ${fmtSet(commentingUsers)}`;
+
+      console.log(msg);
+      d3.select("#status").text(msg.replace(/\n/g, " | "));
+      alert(msg);
+    }
+
+    function showCommentInfo(commentId) {
+      // commentId like "comment_45"
+      const incoming = adjIn[commentId] || [];
+      const authors = new Set();
+      let postTarget = null;
+
+      incoming.forEach(e => {
+        const srcNode = nodeById[e.source];
+        if (!srcNode) return;
+        if (e.etype === "commented" && srcNode.ntype === "user") {
+          authors.add(e.source);
+        }
+      });
+
+      // comment -> post edges are outgoing
+      const outEdges = adjOut[commentId] || [];
+      outEdges.forEach(e => {
+        const tgtNode = nodeById[e.target];
+        if (e.etype === "under" && tgtNode && tgtNode.ntype === "post") {
+          postTarget = e.target;
+        }
+      });
+
+      const fmtSet = (s) => (s.size === 0 ? "none" : Array.from(s).join(", "));
+
+      const msg = `Comment ${commentId}:
+  Written by user(s): ${fmtSet(authors)}
+  Under post: ${postTarget || "unknown"}`;
+
+      console.log(msg);
+      d3.select("#status").text(msg.replace(/\n/g, " | "));
+      alert(msg);
+    }
+
+    // ---------- D3 force simulation with zoom/pan ----------
+    function restartSimulation() {
+      svg.selectAll("*").remove();  // clear
+
+      simulation && simulation.stop();
+
+      // Zoom layer
+      zoomLayer = svg.append("g").attr("class", "zoom-layer");
+
+      // Define arrow marker on the root SVG (not zoomed)
+      const defs = svg.append("defs");
+      defs.append("marker")
+        .attr("id", "arrow")
+        .attr("viewBox", "0 -5 10 10")
+        .attr("refX", 15)
+        .attr("refY", 0)
+        .attr("markerWidth", 6)
+        .attr("markerHeight", 6)
+        .attr("orient", "auto")
+        .append("path")
+        .attr("d", "M0,-5L10,0L0,5")
+        .attr("fill", "#555");
+
+      // Groups inside zoom layer
+      const linksGroup  = zoomLayer.append("g").attr("class", "links");
+      const nodesGroup  = zoomLayer.append("g").attr("class", "nodes");
+      const labelsGroup = zoomLayer.append("g").attr("class", "labels");
+
+      // Create simulation
+      simulation = d3.forceSimulation(currentNodes)
+        .force("link", d3.forceLink(currentLinks).id(d => d.id).distance(80))
+        .force("charge", d3.forceManyBody().strength(-200))
+        .force("center", d3.forceCenter(width() / 2, height() / 2));
+
+      // Links
+      linkSelection = linksGroup.selectAll("line")
+        .data(currentLinks)
+        .enter()
+        .append("line")
+        .attr("stroke-width", 1.5)
+        .attr("stroke", d => edgeColors[d.etype] || "black")
+        .attr("marker-end", "url(#arrow)");
+
+      // Nodes
+      nodeSelection = nodesGroup.selectAll("circle")
+        .data(currentNodes)
+        .enter()
+        .append("circle")
+        .attr("r", d => d.ntype === "user" ? 10 : (d.ntype === "post" ? 8 : 6))
+        .attr("fill", d => nodeColors[d.ntype] || "gray")
+        .attr("class", "node")
+        .on("click", (event, d) => {
+          if (d.ntype === "user") {
+            expandFromNode(d.id);
+          } else if (d.ntype === "post") {
+            showPostInfo(d.id);
+          } else if (d.ntype === "comment") {
+            showCommentInfo(d.id);
+          }
+          event.stopPropagation();
+        })
+        .call(
+          d3.drag()
+            .on("start", dragstarted)
+            .on("drag", dragged)
+            .on("end", dragended)
+        );
+
+      // Labels
+      labelSelection = labelsGroup.selectAll("text")
+        .data(currentNodes)
+        .enter()
+        .append("text")
+        .attr("class", "node-label")
+        .text(d => {
+          if (d.ntype === "user") {
+            return `${d.id} (h${d.hop})`;
+          }
+          return d.id;
+        });
+
+      // Zoom behavior (pan + scroll)
+      const zoom = d3.zoom()
+        .scaleExtent([0.1, 4])
+        .on("zoom", (event) => {
+          zoomLayer.attr("transform", event.transform);
+        });
+
+      svg.call(zoom);
+
+      // Tick
+      simulation.on("tick", () => {
+        linkSelection
+          .attr("x1", d => d.source.x)
+          .attr("y1", d => d.source.y)
+          .attr("x2", d => d.target.x)
+          .attr("y2", d => d.target.y);
+
+        nodeSelection
+          .attr("cx", d => d.x)
+          .attr("cy", d => d.y);
+
+        labelSelection
+          .attr("x", d => d.x + 8)
+          .attr("y", d => d.y + 3);
+      });
+    }
+
+    function dragstarted(event, d) {
+      if (!event.active) simulation.alphaTarget(0.3).restart();
+      d.fx = d.x;
+      d.fy = d.y;
+    }
+    function dragged(event, d) {
+      d.fx = event.x;
+      d.fy = event.y;
+    }
+    function dragended(event, d) {
+      if (!event.active) simulation.alphaTarget(0);
+      d.fx = null;
+      d.fy = null;
+    }
+  </script>
+</body>
+</html>
