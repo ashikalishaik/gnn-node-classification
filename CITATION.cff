@@ -1,0 +1,20 @@
+cff-version: 1.2.0
+message: "If you use this work, please cite it as below."
+authors:
+  - family-names: Shaik
+    given-names: Ashik Ali
+title: "Design, Performance, and Hardware-Aware Evaluation of Graph Neural Networks for Hierarchical Influence Detection"
+version: 1.0.0
+date-released: 2025-12-14
+url: https://github.com/ashikalishaik/gnn-node-classification
+abstract: >
+  A two-phase empirical evaluation of Graph Neural Networks for detecting
+  hierarchical influence patterns, comparing GNNs to feature-only baselines
+  and analyzing CPU vs NVIDIA GPU performance across depth and hop sweeps.
+keywords:
+  - Graph Neural Networks
+  - Influence Detection
+  - GPU Acceleration
+  - Hierarchical Graphs
+  - PyTorch Geometric
+license: MIT
