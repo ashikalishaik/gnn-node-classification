@@ -10,7 +10,7 @@ A research-grade evaluation showing **why Graph Neural Networks outperform featu
 
 ---
 
-## 📊 Results Snapshot (Recruiter View)
+## 📊 Results Snapshot 
 
 | Dataset        | Model        | Accuracy | Macro-F1 | ROC-AUC | GPU Speedup |
 |---------------|-------------|----------|----------|---------|-------------|
